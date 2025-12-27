@@ -329,8 +329,6 @@ def format_email(
         str: Formatted email body text
     """
     body_lines = []
-    body_lines.append("Bitcoin Indicator Update (Last 7 Days)\n")
-    body_lines.append("=" * 40 + "\n")
 
     # Investment recommendation based on flash count
     investment_amounts = {0: 0, 1: 550, 2: 1100, 3: 2100}
@@ -350,7 +348,7 @@ def format_email(
         if value is not None:
             last_date = last_dates.get(name, "N/A")
             if last_date:
-                body_lines.append(f"{name}: {value:.4f} (Last: {last_date})")
+                body_lines.append(f"{name}: {value:.4f} (Last fetch: {last_date})")
             else:
                 body_lines.append(f"{name}: {value:.4f}")
         else:
@@ -443,7 +441,7 @@ def main():
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 
     # Email subject
-    EMAIL_SUBJECT = "BTC Indicator Update"
+    EMAIL_SUBJECT = "BTC DCA TIME"
 
     # ============================================
     # EXECUTION
