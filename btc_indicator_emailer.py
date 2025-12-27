@@ -390,12 +390,14 @@ def format_email(
     # Investment recommendation
     if investment_amount > 0:
         html_body += (
-            f'<h2 style="color: #28a745;">💰 INVESTMENT RECOMMENDATION: '
+            '<h2 style="color: #333; font-size: 1.5em;">'
+            f"💰 INVESTMENT RECOMMENDATION: "
             f"Invest <strong>{investment_amount} EUR</strong></h2>"
         )
     else:
         html_body += (
-            '<h2 style="color: #6c757d;">💰 INVESTMENT RECOMMENDATION: '
+            '<h2 style="color: #333; font-size: 1.5em;">'
+            "💰 INVESTMENT RECOMMENDATION: "
             "No investment (0 EUR)</h2>"
         )
 
@@ -404,11 +406,15 @@ def format_email(
     # Current Bitcoin price
     if btc_price:
         html_body += (
-            f"<p><strong>📊 Current BTC Price:</strong> "
-            f"<strong>${btc_price:,.2f}</strong></p>"
+            '<h2 style="color: #333; font-size: 1.5em;">'
+            f"📊 Current BTC Price: "
+            f"<strong>${btc_price:,.2f}</strong></h2>"
         )
 
-    html_body += "<h3>Minimum Values (Last 7 Days):</h3><ul>"
+    html_body += (
+        '<h2 style="color: #333; font-size: 1.5em;">'
+        "Minimum Values (Last 7 Days):</h2><ul>"
+    )
 
     for name, value in min_indicators.items():
         if value is not None:
@@ -417,49 +423,48 @@ def format_email(
             if last_date:
                 if current_val is not None:
                     html_body += (
-                        f"<li><strong>{name}:</strong> {value:.4f} "
-                        f"(Current: <strong>{current_val:.4f}</strong> "
-                        f"from {last_date})</li>"
+                        f"<li><strong>{name}:</strong> "
+                        f"<strong>{value:.4f}</strong> ({last_date}) / "
+                        f"Current: {current_val:.4f} ({last_date})</li>"
                     )
                 else:
                     html_body += (
-                        f"<li><strong>{name}:</strong> {value:.4f} "
-                        f"(Last fetch: {last_date})</li>"
+                        f"<li><strong>{name}:</strong> "
+                        f"<strong>{value:.4f}</strong> ({last_date})</li>"
                     )
             else:
-                html_body += f"""
-                <li><strong>{name}:</strong> {value:.4f}</li>
-                """
+                html_body += (
+                    f"<li><strong>{name}:</strong> "
+                    f"<strong>{value:.4f}</strong></li>"
+                )
         else:
-            html_body += f"""
-            <li><strong>{name}:</strong> [Error fetching data]</li>
-            """
+            html_body += f"<li><strong>{name}:</strong> " "[Error fetching data]</li>"
 
     html_body += "</ul><hr>"
 
     # Flash information
     html_body += (
-        f"<p><strong>Indicators Flashed:</strong> "
-        f"<strong>{flash_count}/3</strong></p>"
+        '<h2 style="color: #333; font-size: 1.5em;">'
+        f"Indicators Flashed: <strong>{flash_count}/3</strong></h2>"
     )
     if flashed_list:
         html_body += (
-            f"<p><strong>Flashed Indicators:</strong> " f'{", ".join(flashed_list)}</p>'
+            '<h2 style="color: #333; font-size: 1.5em;">'
+            f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
-    html_body += """
-    <p><strong>Flash Thresholds:</strong></p>
-    <ul>
-    <li>MVRV Z-Score: &lt; 0</li>
-    <li>Puell Multiple: &lt; 0.5</li>
-    <li>AHR999: &lt; 0.45</li>
-    </ul>
-    <hr>
-    <p style="color: #6c757d; font-size: 0.9em;">Generated: {timestamp}<br>'
-        'BTC Indicator Emailer</p>'
-    </body>
-    </html>
-    """.format(
-        timestamp=timestamp
+    html_body += (
+        '<h2 style="color: #333; font-size: 1.5em;">Flash Thresholds:</h2>'
+        "<ul>"
+        "<li>MVRV Z-Score: &lt; 0</li>"
+        "<li>Puell Multiple: &lt; 0.5</li>"
+        "<li>AHR999: &lt; 0.45</li>"
+        "</ul>"
+        "<hr>"
+        f'<p style="color: #6c757d; font-size: 0.9em;">'
+        f"Generated: {timestamp}<br>"
+        "BTC Indicator Emailer</p>"
+        "</body>"
+        "</html>"
     )
 
     return html_body
