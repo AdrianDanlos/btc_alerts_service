@@ -186,51 +186,13 @@ def get_ahr999() -> Tuple[float, list[float], str]:
             dca_cost = current_price
 
         # Calculate exponential growth valuation
-        # Using logarithmic regression: log(price) = a + b * log(days)
+        # Standard AHR999 formula: 10^(5.84 × log10(Bitcoin Age) - 17.01)
         days_since_genesis = (point_date - bitcoin_genesis).days
 
-        if prices_200d and days_since_genesis > 0:
-            # Calculate logarithmic regression coefficients
-            log_prices = [math.log(p) for p in prices_200d if p > 0]
-            log_days = []
-            for p in price_points:
-                if point_start_ts <= p[0] / 1000 < point_timestamp:
-                    p_date = datetime.fromtimestamp(p[0] / 1000)
-                    days = (p_date - bitcoin_genesis).days
-                    if days > 0:
-                        log_days.append(math.log(days))
-
-            if len(log_prices) == len(log_days) and len(log_prices) > 1:
-                # Simple linear regression: y = a + b*x
-                # where y = log(price), x = log(days)
-                n = len(log_prices)
-                sum_x = sum(log_days)
-                sum_y = sum(log_prices)
-                sum_xy = sum(log_prices[i] * log_days[i] for i in range(n))
-                sum_x2 = sum(x * x for x in log_days)
-
-                # Calculate regression coefficients
-                denominator = n * sum_x2 - sum_x * sum_x
-                if denominator != 0:
-                    b = (n * sum_xy - sum_x * sum_y) / denominator
-                    a = (sum_y - b * sum_x) / n
-
-                    # Calculate growth valuation for current day
-                    log_days_current = math.log(days_since_genesis)
-                    log_growth_valuation = a + b * log_days_current
-                    growth_valuation = math.exp(log_growth_valuation)
-                else:
-                    # Fallback: use average price
-                    growth_valuation = sum(prices_200d) / len(prices_200d)
-            else:
-                # Fallback: use average of log prices with trend
-                avg_log_price = sum(log_prices) / len(log_prices)
-                # Use a growth rate based on Bitcoin's historical trend
-                # Typical growth rate is around 0.0001-0.0002 per day
-                growth_rate = 0.00015
-                growth_valuation = math.exp(
-                    avg_log_price + growth_rate * days_since_genesis
-                )
+        if days_since_genesis > 0:
+            # Use the standard AHR999 growth valuation formula
+            log10_days = math.log10(days_since_genesis)
+            growth_valuation = 10 ** (5.84 * log10_days - 17.01)
         else:
             growth_valuation = current_price
 
