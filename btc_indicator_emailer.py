@@ -18,6 +18,80 @@ import requests
 from datetime import datetime, timedelta
 import math
 
+# Constants
+DAYS_TO_FETCH = 7
+DCA_WINDOW_DAYS = 200
+BITCOIN_GENESIS = datetime(2009, 1, 3)
+CHARTINSPECT_BASE_URL = "https://chartinspect.com/api/v1/onchain"
+COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
+REQUEST_TIMEOUT = 30
+
+# Flash thresholds
+FLASH_THRESHOLDS = {
+    "MVRV Z-Score": 0,
+    "Puell Multiple": 0.5,
+    "AHR999": 0.45,
+}
+
+# Investment amounts based on flash count
+INVESTMENT_AMOUNTS = {0: 0, 1: 550, 2: 1100, 3: 2100}
+
+
+def _get_date_from_item(item: dict) -> Optional[str]:
+    """Extracts date from API response item."""
+    return item.get("formattedDate") or item.get("date")
+
+
+def _fetch_chartinspect_indicator(
+    endpoint: str, value_key: str
+) -> Tuple[float, list[float], str, str]:
+    """
+    Generic function to fetch ChartInspect indicator data.
+
+    Args:
+        endpoint: API endpoint (e.g., "puell-multiple", "mvrv-z-score")
+        value_key: Key to extract value from response items
+
+    Returns:
+        tuple: (minimum_value, list_of_all_values, min_date, last_date)
+    """
+    api_key = os.getenv("CHARTINSPECT_API_KEY")
+    if not api_key:
+        raise ValueError("CHARTINSPECT_API_KEY environment variable not set")
+
+    url = f"{CHARTINSPECT_BASE_URL}/{endpoint}"
+    params = {"days": DAYS_TO_FETCH}
+    headers = {"X-API-Key": api_key}
+
+    response = requests.get(
+        url, params=params, headers=headers, timeout=REQUEST_TIMEOUT
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    if not data.get("success") or not data.get("data"):
+        raise ValueError("No data returned from ChartInspect API")
+
+    # Find minimum value and its date
+    min_value = float("inf")
+    min_date = None
+    values = []
+
+    for item in data["data"]:
+        value = item[value_key]
+        values.append(value)
+        if value < min_value:
+            min_value = value
+            min_date = _get_date_from_item(item)
+
+    if not values:
+        raise ValueError("Invalid data format from ChartInspect API")
+
+    # Get the last date (most recent data point)
+    last_date = _get_date_from_item(data["data"][-1])
+
+    return (min_value, values, min_date, last_date)
+
 
 def get_puell() -> Tuple[float, list[float], str, str]:
     """
@@ -33,42 +107,7 @@ def get_puell() -> Tuple[float, list[float], str, str]:
     Raises:
         Exception: If API call fails or returns invalid data
     """
-    api_key = os.getenv("CHARTINSPECT_API_KEY")
-    if not api_key:
-        raise ValueError("CHARTINSPECT_API_KEY environment variable not set")
-
-    url = "https://chartinspect.com/api/v1/onchain/puell-multiple"
-    params = {"days": 7}
-    headers = {"X-API-Key": api_key}
-
-    response = requests.get(url, params=params, headers=headers, timeout=30)
-    response.raise_for_status()
-    data = response.json()
-
-    if not data.get("success") or not data.get("data"):
-        raise ValueError("No data returned from ChartInspect API")
-
-    # Find minimum value and its date
-    min_value = float("inf")
-    min_date = None
-    values = []
-
-    for item in data["data"]:
-        value = item["puell_multiple"]
-        values.append(value)
-        if value < min_value:
-            min_value = value
-            min_date = item.get("formattedDate") or item.get("date")
-
-    if not values:
-        raise ValueError("Invalid data format from ChartInspect API")
-
-    # Get the last date (most recent data point)
-    last_item = data["data"][-1]
-    last_date = last_item.get("formattedDate") or last_item.get("date")
-
-    # Return minimum value, all values, min date, and last date
-    return (min_value, values, min_date, last_date)
+    return _fetch_chartinspect_indicator("puell-multiple", "puell_multiple")
 
 
 def get_mvrv_z() -> Tuple[float, list[float], str, str]:
@@ -85,42 +124,7 @@ def get_mvrv_z() -> Tuple[float, list[float], str, str]:
     Raises:
         Exception: If API call fails or returns invalid data
     """
-    api_key = os.getenv("CHARTINSPECT_API_KEY")
-    if not api_key:
-        raise ValueError("CHARTINSPECT_API_KEY environment variable not set")
-
-    url = "https://chartinspect.com/api/v1/onchain/mvrv-z-score"
-    params = {"days": 7}
-    headers = {"X-API-Key": api_key}
-
-    response = requests.get(url, params=params, headers=headers, timeout=30)
-    response.raise_for_status()
-    data = response.json()
-
-    if not data.get("success") or not data.get("data"):
-        raise ValueError("No data returned from ChartInspect API")
-
-    # Find minimum value and its date
-    min_value = float("inf")
-    min_date = None
-    values = []
-
-    for item in data["data"]:
-        value = item["z_score"]
-        values.append(value)
-        if value < min_value:
-            min_value = value
-            min_date = item.get("formattedDate") or item.get("date")
-
-    if not values:
-        raise ValueError("Invalid data format from ChartInspect API")
-
-    # Get the last date (most recent data point)
-    last_item = data["data"][-1]
-    last_date = last_item.get("formattedDate") or last_item.get("date")
-
-    # Return minimum value, all values, min date, and last date
-    return (min_value, values, min_date, last_date)
+    return _fetch_chartinspect_indicator("mvrv-z-score", "z_score")
 
 
 def get_ahr999() -> Tuple[float, list[float], str, str]:
@@ -141,16 +145,16 @@ def get_ahr999() -> Tuple[float, list[float], str, str]:
     """
     # Get 7 days of historical prices plus 200 days for DCA calculation
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=207)  # 7 days + 200 days buffer
+    start_date = end_date - timedelta(days=DAYS_TO_FETCH + DCA_WINDOW_DAYS)
     start_timestamp = int(start_date.timestamp())
     end_timestamp = int(end_date.timestamp())
 
     historical_url = (
-        f"https://api.coingecko.com/api/v3/coins/bitcoin"
+        f"{COINGECKO_BASE_URL}/coins/bitcoin"
         f"/market_chart/range?vs_currency=usd"
         f"&from={start_timestamp}&to={end_timestamp}"
     )
-    response = requests.get(historical_url, timeout=30)
+    response = requests.get(historical_url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     historical_data = response.json()
 
@@ -160,12 +164,11 @@ def get_ahr999() -> Tuple[float, list[float], str, str]:
         raise ValueError("No price data returned from CoinGecko API")
 
     # Get prices for last 7 days (for AHR999 calculation)
-    seven_days_ago = end_date - timedelta(days=7)
+    seven_days_ago = end_date - timedelta(days=DAYS_TO_FETCH)
     seven_days_timestamp = int(seven_days_ago.timestamp())
 
     ahr999_values = []
     ahr999_with_dates = []  # List of (value, date) tuples
-    bitcoin_genesis = datetime(2009, 1, 3)
 
     # Group prices by day to calculate once per day
     daily_prices = {}
@@ -188,8 +191,8 @@ def get_ahr999() -> Tuple[float, list[float], str, str]:
         point_timestamp = point_date.timestamp()
 
         # Get 200 days of prices before this point for DCA calculation
-        point_start = point_date - timedelta(days=200)
-        point_start_ts = point_start.timestamp()
+        point_start = point_date - timedelta(days=DCA_WINDOW_DAYS)
+        point_start_ts = int(point_start.timestamp())
 
         # Find prices in the 200-day window before this point
         prices_200d = [
@@ -210,7 +213,7 @@ def get_ahr999() -> Tuple[float, list[float], str, str]:
 
         # Calculate exponential growth valuation
         # Standard AHR999 formula: 10^(5.84 × log10(Bitcoin Age) - 17.01)
-        days_since_genesis = (point_date - bitcoin_genesis).days
+        days_since_genesis = (point_date - BITCOIN_GENESIS).days
 
         if days_since_genesis > 0:
             # Use the standard AHR999 growth valuation formula
@@ -253,11 +256,6 @@ def check_flashes(
     Checks how many indicators have "flashed" (reached thresholds)
     in last 7 days.
 
-    Thresholds:
-    - MVRV Z-Score: < 0
-    - Puell Multiple: < 0.5
-    - AHR999: < 0.45
-
     Args:
         mvrv_values: List of MVRV Z-Score values
         puell_values: List of Puell Multiple values
@@ -268,22 +266,19 @@ def check_flashes(
             - flash_count: Number of indicators that flashed (0-3)
             - flashed_indicators: List of indicator names that flashed
     """
-    flashes = 0
+    indicator_data = [
+        ("MVRV Z-Score", mvrv_values),
+        ("Puell Multiple", puell_values),
+        ("AHR999", ahr999_values),
+    ]
+
     flashed_indicators = []
+    for name, values in indicator_data:
+        threshold = FLASH_THRESHOLDS.get(name)
+        if threshold is not None and values and any(v < threshold for v in values):
+            flashed_indicators.append(name)
 
-    if mvrv_values and any(v < 0 for v in mvrv_values):
-        flashes += 1
-        flashed_indicators.append("MVRV Z-Score")
-
-    if puell_values and any(v < 0.5 for v in puell_values):
-        flashes += 1
-        flashed_indicators.append("Puell Multiple")
-
-    if ahr999_values and any(v < 0.45 for v in ahr999_values):
-        flashes += 1
-        flashed_indicators.append("AHR999")
-
-    return (flashes, flashed_indicators)
+    return (len(flashed_indicators), flashed_indicators)
 
 
 def get_current_btc_price() -> Optional[float]:
@@ -294,15 +289,42 @@ def get_current_btc_price() -> Optional[float]:
         float: Current Bitcoin price in USD, or None if fetch fails
     """
     try:
-        url = (
-            "https://api.coingecko.com/api/v3/simple/price"
-            "?ids=bitcoin&vs_currencies=usd"
-        )
-        response = requests.get(url, timeout=30)
+        url = f"{COINGECKO_BASE_URL}/simple/price" "?ids=bitcoin&vs_currencies=usd"
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         return float(response.json()["bitcoin"]["usd"])
     except Exception as e:
         print(f"Error fetching current BTC price: {e}")
+        return None
+
+
+def _fetch_single_indicator(
+    name: str,
+    fetch_func,
+    min_indicators: Dict[str, Optional[float]],
+    current_indicators: Dict[str, Optional[float]],
+    min_dates: Dict[str, Optional[str]],
+    last_dates: Dict[str, Optional[str]],
+) -> Optional[list[float]]:
+    """
+    Helper function to fetch a single indicator and handle errors.
+
+    Returns:
+        List of values for flash detection, or None if fetch failed
+    """
+    try:
+        min_value, all_values, min_date, last_date = fetch_func()
+        min_indicators[name] = min_value
+        current_indicators[name] = all_values[-1] if all_values else None
+        min_dates[name] = min_date
+        last_dates[name] = last_date
+        return all_values
+    except Exception as e:
+        print(f"Error fetching {name}: {e}")
+        min_indicators[name] = None
+        current_indicators[name] = None
+        min_dates[name] = None
+        last_dates[name] = None
         return None
 
 
@@ -335,51 +357,32 @@ def fetch_indicators() -> Tuple[
     current_indicators = {}
     min_dates = {}
     last_dates = {}
-    mvrv_values = None
-    puell_values = None
-    ahr999_values = None
 
-    try:
-        min_value, all_values, min_date, last_date = get_puell()
-        min_indicators["Puell Multiple"] = min_value
-        current_indicators["Puell Multiple"] = all_values[-1] if all_values else None
-        min_dates["Puell Multiple"] = min_date
-        last_dates["Puell Multiple"] = last_date
-        puell_values = all_values
-    except Exception as e:
-        print(f"Error fetching Puell Multiple: {e}")
-        min_indicators["Puell Multiple"] = None
-        current_indicators["Puell Multiple"] = None
-        min_dates["Puell Multiple"] = None
-        last_dates["Puell Multiple"] = None
-
-    try:
-        min_value, all_values, min_date, last_date = get_mvrv_z()
-        min_indicators["MVRV Z-Score"] = min_value
-        current_indicators["MVRV Z-Score"] = all_values[-1] if all_values else None
-        min_dates["MVRV Z-Score"] = min_date
-        last_dates["MVRV Z-Score"] = last_date
-        mvrv_values = all_values
-    except Exception as e:
-        print(f"Error fetching MVRV Z-Score: {e}")
-        min_indicators["MVRV Z-Score"] = None
-        current_indicators["MVRV Z-Score"] = None
-        min_dates["MVRV Z-Score"] = None
-        last_dates["MVRV Z-Score"] = None
-
-    try:
-        min_value, all_values, min_date, last_date = get_ahr999()
-        min_indicators["AHR999"] = min_value
-        current_indicators["AHR999"] = all_values[-1] if all_values else None
-        min_dates["AHR999"] = min_date
-        last_dates["AHR999"] = last_date
-        ahr999_values = all_values
-    except Exception as e:
-        print(f"Error fetching AHR999: {e}")
-        min_indicators["AHR999"] = None
-        current_indicators["AHR999"] = None
-        min_dates["AHR999"] = None
-        last_dates["AHR999"] = None
+    # Fetch all indicators
+    puell_values = _fetch_single_indicator(
+        "Puell Multiple",
+        get_puell,
+        min_indicators,
+        current_indicators,
+        min_dates,
+        last_dates,
+    )
+    mvrv_values = _fetch_single_indicator(
+        "MVRV Z-Score",
+        get_mvrv_z,
+        min_indicators,
+        current_indicators,
+        min_dates,
+        last_dates,
+    )
+    ahr999_values = _fetch_single_indicator(
+        "AHR999",
+        get_ahr999,
+        min_indicators,
+        current_indicators,
+        min_dates,
+        last_dates,
+    )
 
     # Check for flashes
     flash_count, flashed_list = check_flashes(
@@ -421,10 +424,7 @@ def format_email(
         str: Formatted email body as HTML
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    # Investment recommendation based on flash count
-    investment_amounts = {0: 0, 1: 550, 2: 1100, 3: 2100}
-    investment_amount = investment_amounts.get(flash_count, 0)
+    investment_amount = INVESTMENT_AMOUNTS.get(flash_count, 0)
 
     html_body = """
     <html>
@@ -440,13 +440,13 @@ def format_email(
     if investment_amount > 0:
         html_body += (
             '<h2 class="title">'
-            f"INVESTMENT RECOMMENDATION: "
+            f"Investment Recommendation: "
             f"Invest {investment_amount} EUR</h2>"
         )
     else:
         html_body += (
             '<h2 class="title">'
-            "INVESTMENT RECOMMENDATION: "
+            "Investment Recommendation: "
             "No investment (0 EUR)</h2>"
         )
 
@@ -454,12 +454,10 @@ def format_email(
 
     # Current Bitcoin price
     if btc_price:
-        html_body += (
-            '<h2 class="title">' f"Current BTC Price: " f"${btc_price:,.2f}</h2>"
-        )
+        html_body += f'<h2 class="title">Current BTC Price: ' f"${btc_price:,.2f}</h2>"
 
     html_body += (
-        '<h2 class="title">' "Minimum Values (Last 7 Days):</h2>" '<ul class="text">'
+        '<h2 class="title">Minimum Values (Last 7 Days):</h2>' '<ul class="text">'
     )
 
     for name, value in min_indicators.items():
@@ -471,23 +469,25 @@ def format_email(
                 if current_val is not None:
                     html_body += (
                         f'<li class="text"><strong>{name}:</strong> '
-                        f"<strong>{value:.4f}</strong> ({min_date}) / "
+                        f"Lowest: <strong>{value:.4f}</strong> ({min_date}) / "
                         f"Current: {current_val:.4f} ({last_date})</li>"
                     )
                 else:
                     html_body += (
                         f'<li class="text"><strong>{name}:</strong> '
-                        f"<strong>{value:.4f}</strong> ({min_date})</li>"
+                        f"Lowest: <strong>{value:.4f}</strong> "
+                        f"({min_date})</li>"
                     )
             elif min_date:
                 html_body += (
                     f'<li class="text"><strong>{name}:</strong> '
-                    f"<strong>{value:.4f}</strong> ({min_date})</li>"
+                    f"Lowest: <strong>{value:.4f}</strong> "
+                    f"({min_date})</li>"
                 )
             else:
                 html_body += (
                     f'<li class="text"><strong>{name}:</strong> '
-                    f"<strong>{value:.4f}</strong></li>"
+                    f"Lowest: <strong>{value:.4f}</strong></li>"
                 )
         else:
             html_body += (
@@ -498,17 +498,17 @@ def format_email(
     html_body += "</ul><hr>"
 
     # Flash information
-    html_body += '<h2 class="title">' f"Indicators Flashed: {flash_count}/3</h2>"
+    html_body += f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
     if flashed_list:
         html_body += (
-            '<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
+            f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
+    html_body += '<ul class="text">'
+    for name, threshold in FLASH_THRESHOLDS.items():
+        html_body += f"<li>{name}: &lt; {threshold}</li>"
     html_body += (
-        '<ul class="text">'
-        "<li>MVRV Z-Score: &lt; 0</li>"
-        "<li>Puell Multiple: &lt; 0.5</li>"
-        "<li>AHR999: &lt; 0.45</li>"
         "</ul>"
+        "<br>"
         "<hr>"
         f'<p class="footer">'
         f"Generated: {timestamp}<br>"
