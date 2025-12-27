@@ -19,14 +19,15 @@ from datetime import datetime, timedelta
 import math
 
 
-def get_puell() -> Tuple[float, list[float], str]:
+def get_puell() -> Tuple[float, list[float], str, str]:
     """
     Fetches Puell Multiple from ChartInspect API for last 7 days.
 
     Returns:
-        tuple: (minimum_value, list_of_all_values, last_date)
+        tuple: (minimum_value, list_of_all_values, min_date, last_date)
             - minimum_value: Lowest Puell Multiple in last 7 days
             - list_of_all_values: All values for flash detection
+            - min_date: Date when minimum value occurred (YYYY-MM-DD)
             - last_date: Last available date (YYYY-MM-DD format)
 
     Raises:
@@ -47,8 +48,18 @@ def get_puell() -> Tuple[float, list[float], str]:
     if not data.get("success") or not data.get("data"):
         raise ValueError("No data returned from ChartInspect API")
 
-    # Extract all puell_multiple values and get last date
-    values = [item["puell_multiple"] for item in data["data"]]
+    # Find minimum value and its date
+    min_value = float("inf")
+    min_date = None
+    values = []
+
+    for item in data["data"]:
+        value = item["puell_multiple"]
+        values.append(value)
+        if value < min_value:
+            min_value = value
+            min_date = item.get("formattedDate") or item.get("date")
+
     if not values:
         raise ValueError("Invalid data format from ChartInspect API")
 
@@ -56,18 +67,19 @@ def get_puell() -> Tuple[float, list[float], str]:
     last_item = data["data"][-1]
     last_date = last_item.get("formattedDate") or last_item.get("date")
 
-    # Return minimum value, all values, and last date
-    return (min(values), values, last_date)
+    # Return minimum value, all values, min date, and last date
+    return (min_value, values, min_date, last_date)
 
 
-def get_mvrv_z() -> Tuple[float, list[float], str]:
+def get_mvrv_z() -> Tuple[float, list[float], str, str]:
     """
     Fetches MVRV Z-Score from ChartInspect API for last 7 days.
 
     Returns:
-        tuple: (minimum_value, list_of_all_values, last_date)
+        tuple: (minimum_value, list_of_all_values, min_date, last_date)
             - minimum_value: Lowest MVRV Z-Score in last 7 days
             - list_of_all_values: All values for flash detection
+            - min_date: Date when minimum value occurred (YYYY-MM-DD)
             - last_date: Last available date (YYYY-MM-DD format)
 
     Raises:
@@ -88,8 +100,18 @@ def get_mvrv_z() -> Tuple[float, list[float], str]:
     if not data.get("success") or not data.get("data"):
         raise ValueError("No data returned from ChartInspect API")
 
-    # Extract all z_score values and get last date
-    values = [item["z_score"] for item in data["data"]]
+    # Find minimum value and its date
+    min_value = float("inf")
+    min_date = None
+    values = []
+
+    for item in data["data"]:
+        value = item["z_score"]
+        values.append(value)
+        if value < min_value:
+            min_value = value
+            min_date = item.get("formattedDate") or item.get("date")
+
     if not values:
         raise ValueError("Invalid data format from ChartInspect API")
 
@@ -97,20 +119,21 @@ def get_mvrv_z() -> Tuple[float, list[float], str]:
     last_item = data["data"][-1]
     last_date = last_item.get("formattedDate") or last_item.get("date")
 
-    # Return minimum value, all values, and last date
-    return (min(values), values, last_date)
+    # Return minimum value, all values, min date, and last date
+    return (min_value, values, min_date, last_date)
 
 
-def get_ahr999() -> Tuple[float, list[float], str]:
+def get_ahr999() -> Tuple[float, list[float], str, str]:
     """
     Calculates AHR999 indicator using CoinGecko API for last 7 days.
 
     Formula: AHR999 = (Price / 200-day DCA Cost) × (Price / Growth Valuation)
 
     Returns:
-        tuple: (minimum_value, list_of_all_values, last_date)
+        tuple: (minimum_value, list_of_all_values, min_date, last_date)
             - minimum_value: Lowest AHR999 in last 7 days
             - list_of_all_values: All values for flash detection
+            - min_date: Date when minimum value occurred (YYYY-MM-DD)
             - last_date: Last available date (YYYY-MM-DD format)
 
     Raises:
@@ -141,7 +164,7 @@ def get_ahr999() -> Tuple[float, list[float], str]:
     seven_days_timestamp = int(seven_days_ago.timestamp())
 
     ahr999_values = []
-    last_date_str = None
+    ahr999_with_dates = []  # List of (value, date) tuples
     bitcoin_genesis = datetime(2009, 1, 3)
 
     # Group prices by day to calculate once per day
@@ -201,15 +224,24 @@ def get_ahr999() -> Tuple[float, list[float], str]:
         growth_ratio = current_price / growth_valuation
         ahr999 = price_ratio * growth_ratio
         ahr999_values.append(ahr999)
-
-        # Track the last date (most recent calculation)
-        last_date_str = date_key
+        ahr999_with_dates.append((ahr999, date_key))
 
     if not ahr999_values:
         raise ValueError("Could not calculate AHR999 values")
 
-    # Return minimum value, all values, and last date
-    return (min(ahr999_values), ahr999_values, last_date_str)
+    # Find minimum value and its date
+    min_value = min(ahr999_values)
+    min_date = None
+    for value, date in ahr999_with_dates:
+        if value == min_value:
+            min_date = date
+            break
+
+    # Get the last date (most recent calculation)
+    last_date_str = ahr999_with_dates[-1][1] if ahr999_with_dates else None
+
+    # Return minimum value, all values, min date, and last date
+    return (min_value, ahr999_values, min_date, last_date_str)
 
 
 def check_flashes(
@@ -278,6 +310,7 @@ def fetch_indicators() -> Tuple[
     Dict[str, Optional[float]],
     Dict[str, Optional[float]],
     Dict[str, Optional[str]],
+    Dict[str, Optional[str]],
     int,
     list[str],
 ]:
@@ -285,10 +318,11 @@ def fetch_indicators() -> Tuple[
     Fetches all three Bitcoin indicators and checks for flashes.
 
     Returns:
-        tuple: (min_indicators, current_indicators, last_dates, flash_count,
-                flashed_list)
+        tuple: (min_indicators, current_indicators, min_dates, last_dates,
+                flash_count, flashed_list)
             - min_indicators: Dictionary with minimum values (from last 7 days)
             - current_indicators: Dictionary with current/latest values
+            - min_dates: Dictionary with dates when minimum occurred
             - last_dates: Dictionary with last available dates (YYYY-MM-DD)
             - flash_count: Number of indicators that flashed (0-3)
             - flashed_list: List of indicator names that flashed
@@ -299,45 +333,52 @@ def fetch_indicators() -> Tuple[
     """
     min_indicators = {}
     current_indicators = {}
+    min_dates = {}
     last_dates = {}
     mvrv_values = None
     puell_values = None
     ahr999_values = None
 
     try:
-        min_value, all_values, last_date = get_puell()
+        min_value, all_values, min_date, last_date = get_puell()
         min_indicators["Puell Multiple"] = min_value
         current_indicators["Puell Multiple"] = all_values[-1] if all_values else None
+        min_dates["Puell Multiple"] = min_date
         last_dates["Puell Multiple"] = last_date
         puell_values = all_values
     except Exception as e:
         print(f"Error fetching Puell Multiple: {e}")
         min_indicators["Puell Multiple"] = None
         current_indicators["Puell Multiple"] = None
+        min_dates["Puell Multiple"] = None
         last_dates["Puell Multiple"] = None
 
     try:
-        min_value, all_values, last_date = get_mvrv_z()
+        min_value, all_values, min_date, last_date = get_mvrv_z()
         min_indicators["MVRV Z-Score"] = min_value
         current_indicators["MVRV Z-Score"] = all_values[-1] if all_values else None
+        min_dates["MVRV Z-Score"] = min_date
         last_dates["MVRV Z-Score"] = last_date
         mvrv_values = all_values
     except Exception as e:
         print(f"Error fetching MVRV Z-Score: {e}")
         min_indicators["MVRV Z-Score"] = None
         current_indicators["MVRV Z-Score"] = None
+        min_dates["MVRV Z-Score"] = None
         last_dates["MVRV Z-Score"] = None
 
     try:
-        min_value, all_values, last_date = get_ahr999()
+        min_value, all_values, min_date, last_date = get_ahr999()
         min_indicators["AHR999"] = min_value
         current_indicators["AHR999"] = all_values[-1] if all_values else None
+        min_dates["AHR999"] = min_date
         last_dates["AHR999"] = last_date
         ahr999_values = all_values
     except Exception as e:
         print(f"Error fetching AHR999: {e}")
         min_indicators["AHR999"] = None
         current_indicators["AHR999"] = None
+        min_dates["AHR999"] = None
         last_dates["AHR999"] = None
 
     # Check for flashes
@@ -348,6 +389,7 @@ def fetch_indicators() -> Tuple[
     return (
         min_indicators,
         current_indicators,
+        min_dates,
         last_dates,
         flash_count,
         flashed_list,
@@ -357,6 +399,7 @@ def fetch_indicators() -> Tuple[
 def format_email(
     min_indicators: Dict[str, Optional[float]],
     current_indicators: Dict[str, Optional[float]],
+    min_dates: Dict[str, Optional[str]],
     last_dates: Dict[str, Optional[str]],
     flash_count: int,
     flashed_list: list[str],
@@ -368,6 +411,7 @@ def format_email(
     Args:
         min_indicators: Dictionary with minimum values (from last 7 days)
         current_indicators: Dictionary with current/latest values
+        min_dates: Dictionary with dates when minimum values occurred
         last_dates: Dictionary with last available dates
         flash_count: Number of indicators that flashed (0-3)
         flashed_list: List of indicator names that flashed
@@ -396,13 +440,13 @@ def format_email(
     if investment_amount > 0:
         html_body += (
             '<h2 class="title">'
-            f"💰 INVESTMENT RECOMMENDATION: "
-            f"Invest <strong>{investment_amount} EUR</strong></h2>"
+            f"INVESTMENT RECOMMENDATION: "
+            f"Invest {investment_amount} EUR</h2>"
         )
     else:
         html_body += (
             '<h2 class="title">'
-            "💰 INVESTMENT RECOMMENDATION: "
+            "INVESTMENT RECOMMENDATION: "
             "No investment (0 EUR)</h2>"
         )
 
@@ -411,9 +455,7 @@ def format_email(
     # Current Bitcoin price
     if btc_price:
         html_body += (
-            '<h2 class="title">'
-            f"📊 Current BTC Price: "
-            f"<strong>${btc_price:,.2f}</strong></h2>"
+            '<h2 class="title">' f"Current BTC Price: " f"${btc_price:,.2f}</h2>"
         )
 
     html_body += (
@@ -422,20 +464,26 @@ def format_email(
 
     for name, value in min_indicators.items():
         if value is not None:
+            min_date = min_dates.get(name, "N/A")
             last_date = last_dates.get(name, "N/A")
             current_val = current_indicators.get(name)
-            if last_date:
+            if min_date and last_date:
                 if current_val is not None:
                     html_body += (
                         f'<li class="text"><strong>{name}:</strong> '
-                        f"<strong>{value:.4f}</strong> ({last_date}) / "
+                        f"<strong>{value:.4f}</strong> ({min_date}) / "
                         f"Current: {current_val:.4f} ({last_date})</li>"
                     )
                 else:
                     html_body += (
                         f'<li class="text"><strong>{name}:</strong> '
-                        f"<strong>{value:.4f}</strong> ({last_date})</li>"
+                        f"<strong>{value:.4f}</strong> ({min_date})</li>"
                     )
+            elif min_date:
+                html_body += (
+                    f'<li class="text"><strong>{name}:</strong> '
+                    f"<strong>{value:.4f}</strong> ({min_date})</li>"
+                )
             else:
                 html_body += (
                     f'<li class="text"><strong>{name}:</strong> '
@@ -450,16 +498,12 @@ def format_email(
     html_body += "</ul><hr>"
 
     # Flash information
-    html_body += (
-        '<h2 class="title">'
-        f"Indicators Flashed: <strong>{flash_count}/3</strong></h2>"
-    )
+    html_body += '<h2 class="title">' f"Indicators Flashed: {flash_count}/3</h2>"
     if flashed_list:
         html_body += (
             '<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
     html_body += (
-        '<h2 class="title">Flash Thresholds:</h2>'
         '<ul class="text">'
         "<li>MVRV Z-Score: &lt; 0</li>"
         "<li>Puell Multiple: &lt; 0.5</li>"
@@ -560,6 +604,7 @@ def main():
     (
         min_indicators,
         current_indicators,
+        min_dates,
         last_dates,
         flash_count,
         flashed_list,
@@ -577,6 +622,7 @@ def main():
     email_body = format_email(
         min_indicators,
         current_indicators,
+        min_dates,
         last_dates,
         flash_count,
         flashed_list,
