@@ -468,7 +468,7 @@ def format_email(
             min_date = min_dates.get(name, "N/A")
             last_date = last_dates.get(name, "N/A")
             current_val = current_indicators.get(name)
-            html_body += f'<div class="text"><div class="indicator-name">{name}</div>'
+            html_body += f'<div class="text"><div class="indicator-name"><strong>{name}</strong></div>'
             if min_date:
                 html_body += (
                     f"<div><strong>Lowest: {value:.4f} ({min_date})</strong></div>"
@@ -482,7 +482,7 @@ def format_email(
             html_body += "</div><br>"
         else:
             html_body += (
-                f'<div class="text"><div class="indicator-name">{name}</div>'
+                f'<div class="text"><div class="indicator-name"><strong>{name}</strong></div>'
                 "<div>[Error fetching data]</div></div><br>"
             )
 
@@ -494,11 +494,11 @@ def format_email(
         html_body += (
             f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
-    html_body += '<ul class="text">'
+    html_body += '<div class="text">'
     for name, threshold in FLASH_THRESHOLDS.items():
-        html_body += f"<li>{name}: &lt; {threshold}</li>"
+        html_body += f"<div>{name}: &lt; {threshold}</div>"
     html_body += (
-        "</ul>"
+        "</div>"
         "<br>"
         "<hr>"
         f'<p class="footer">'
