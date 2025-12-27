@@ -374,59 +374,95 @@ def format_email(
         btc_price: Current Bitcoin price in USD
 
     Returns:
-        str: Formatted email body text
+        str: Formatted email body as HTML
     """
-    body_lines = []
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Investment recommendation based on flash count
     investment_amounts = {0: 0, 1: 550, 2: 1100, 3: 2100}
     investment_amount = investment_amounts.get(flash_count, 0)
 
+    html_body = """
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+    """
+
+    # Investment recommendation
     if investment_amount > 0:
-        body_lines.append(
-            f"💰 INVESTMENT RECOMMENDATION: " f"Invest {investment_amount} EUR\n"
+        html_body += (
+            f'<h2 style="color: #28a745;">💰 INVESTMENT RECOMMENDATION: '
+            f"Invest <strong>{investment_amount} EUR</strong></h2>"
         )
     else:
-        body_lines.append("💰 INVESTMENT RECOMMENDATION: No investment (0 EUR)\n")
+        html_body += (
+            '<h2 style="color: #6c757d;">💰 INVESTMENT RECOMMENDATION: '
+            "No investment (0 EUR)</h2>"
+        )
 
-    body_lines.append("=" * 40 + "\n")
+    html_body += "<hr>"
 
     # Current Bitcoin price
     if btc_price:
-        body_lines.append(f"📊 Current BTC Price: ${btc_price:,.2f}\n")
+        html_body += (
+            f"<p><strong>📊 Current BTC Price:</strong> "
+            f"<strong>${btc_price:,.2f}</strong></p>"
+        )
 
-    body_lines.append("Minimum Values (Last 7 Days):\n")
+    html_body += "<h3>Minimum Values (Last 7 Days):</h3><ul>"
+
     for name, value in min_indicators.items():
         if value is not None:
             last_date = last_dates.get(name, "N/A")
             current_val = current_indicators.get(name)
             if last_date:
                 if current_val is not None:
-                    body_lines.append(
-                        f"{name}: {value:.4f} (Current: {current_val:.4f} "
-                        f"from {last_date})"
+                    html_body += (
+                        f"<li><strong>{name}:</strong> {value:.4f} "
+                        f"(Current: <strong>{current_val:.4f}</strong> "
+                        f"from {last_date})</li>"
                     )
                 else:
-                    body_lines.append(f"{name}: {value:.4f} (Last fetch: {last_date})")
+                    html_body += (
+                        f"<li><strong>{name}:</strong> {value:.4f} "
+                        f"(Last fetch: {last_date})</li>"
+                    )
             else:
-                body_lines.append(f"{name}: {value:.4f}")
+                html_body += f"""
+                <li><strong>{name}:</strong> {value:.4f}</li>
+                """
         else:
-            body_lines.append(f"{name}: [Error fetching data]")
+            html_body += f"""
+            <li><strong>{name}:</strong> [Error fetching data]</li>
+            """
 
-    body_lines.append("\n" + "=" * 40)
-    body_lines.append(f"\nIndicators Flashed: {flash_count}/3")
+    html_body += "</ul><hr>"
+
+    # Flash information
+    html_body += (
+        f"<p><strong>Indicators Flashed:</strong> "
+        f"<strong>{flash_count}/3</strong></p>"
+    )
     if flashed_list:
-        body_lines.append(f"Flashed Indicators: {', '.join(flashed_list)}")
-    body_lines.append("\nFlash Thresholds:")
-    body_lines.append("  - MVRV Z-Score: < 0")
-    body_lines.append("  - Puell Multiple: < 0.5")
-    body_lines.append("  - AHR999: < 0.45")
-    body_lines.append("\n" + "=" * 40)
-    body_lines.append(f"\nGenerated: {timestamp}")
-    body_lines.append("BTC Indicator Emailer")
+        html_body += (
+            f"<p><strong>Flashed Indicators:</strong> " f'{", ".join(flashed_list)}</p>'
+        )
+    html_body += """
+    <p><strong>Flash Thresholds:</strong></p>
+    <ul>
+    <li>MVRV Z-Score: &lt; 0</li>
+    <li>Puell Multiple: &lt; 0.5</li>
+    <li>AHR999: &lt; 0.45</li>
+    </ul>
+    <hr>
+    <p style="color: #6c757d; font-size: 0.9em;">Generated: {timestamp}<br>'
+        'BTC Indicator Emailer</p>'
+    </body>
+    </html>
+    """.format(
+        timestamp=timestamp
+    )
 
-    return "\n".join(body_lines)
+    return html_body
 
 
 def send_email(
@@ -464,7 +500,7 @@ def send_email(
         msg["From"] = sender_email
         msg["To"] = recipient_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+        msg.attach(MIMEText(body, "html"))
 
         # Connect to server and send email
         server = smtplib.SMTP(smtp_server, smtp_port)
