@@ -454,10 +454,12 @@ def format_email(
 
     # Current Bitcoin price
     if btc_price:
-        html_body += f'<h2 class="title">BTC Price: ' f"${btc_price:,.2f}</h2>"
+        html_body += "<br>" f'<h2 class="title">BTC Price: ' f"${btc_price:,.2f}</h2>"
 
     html_body += (
-        '<h2 class="title">Minimum Values for Indicators (Last 7 Days):</h2>' '<ul class="text">'
+        '<h2 class="title">'
+        "Minimum Values for Indicators (Last 7 Days):</h2>"
+        '<ul class="text">'
     )
 
     for name, value in min_indicators.items():
@@ -498,7 +500,7 @@ def format_email(
     html_body += "</ul><br><hr>"
 
     # Flash information
-    html_body += f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
+    html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
     if flashed_list:
         html_body += (
             f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
