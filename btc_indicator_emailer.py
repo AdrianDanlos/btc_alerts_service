@@ -444,6 +444,7 @@ def format_email(
     html_body += "<br><hr>"
 
     # Investment recommendation
+    html_body += "<br>"
     if investment_amount > 0:
         html_body += (
             '<h2 class="title">'
@@ -459,9 +460,8 @@ def format_email(
 
     html_body += "<br><hr>"
 
-    html_body += (
-        '<h2 class="title">' "Minimum Values for Indicators (Last 7 Days)</h2>"
-    )
+    html_body += "<br>"
+    html_body += '<h2 class="title">' "Minimum Values for Indicators (Last 7 Days)</h2>"
 
     for name, value in min_indicators.items():
         if value is not None:
@@ -471,22 +471,22 @@ def format_email(
             html_body += f'<div class="text"><div class="indicator-name">{name}</div>'
             if min_date:
                 html_body += (
-                    f"<div>Lowest: <strong>{value:.4f}</strong> ({min_date})</div>"
+                    f"<div><strong>Lowest: {value:.4f} ({min_date})</strong></div>"
                 )
             else:
-                html_body += f"<div>Lowest: <strong>{value:.4f}</strong></div>"
+                html_body += f"<div><strong>Lowest: {value:.4f}</strong></div>"
             if current_val is not None and last_date:
                 html_body += f"<div>Current: {current_val:.4f} ({last_date})</div>"
             elif current_val is not None:
                 html_body += f"<div>Current: {current_val:.4f}</div>"
-            html_body += "</div>"
+            html_body += "</div><br>"
         else:
             html_body += (
                 f'<div class="text"><div class="indicator-name">{name}</div>'
-                "<div>[Error fetching data]</div></div>"
+                "<div>[Error fetching data]</div></div><br>"
             )
 
-    html_body += "<br><hr>"
+    html_body += "<br><br><hr>"
 
     # Flash information
     html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
