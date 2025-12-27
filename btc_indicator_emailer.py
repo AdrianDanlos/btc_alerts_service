@@ -233,17 +233,9 @@ def get_ahr999() -> Tuple[float, list[float], str, str]:
         raise ValueError("Could not calculate AHR999 values")
 
     # Find minimum value and its date
-    min_value = min(ahr999_values)
-    min_date = None
-    for value, date in ahr999_with_dates:
-        if value == min_value:
-            min_date = date
-            break
-
-    # Get the last date (most recent calculation)
+    min_value, min_date = min(ahr999_with_dates, key=lambda x: x[0])
     last_date_str = ahr999_with_dates[-1][1] if ahr999_with_dates else None
 
-    # Return minimum value, all values, min date, and last date
     return (min_value, ahr999_values, min_date, last_date_str)
 
 
@@ -272,12 +264,13 @@ def check_flashes(
         ("AHR999", ahr999_values),
     ]
 
-    flashed_indicators = []
-    for name, values in indicator_data:
-        threshold = FLASH_THRESHOLDS.get(name)
-        if threshold is not None and values and any(v < threshold for v in values):
-            flashed_indicators.append(name)
-
+    flashed_indicators = [
+        name
+        for name, values in indicator_data
+        if FLASH_THRESHOLDS.get(name) is not None
+        and values
+        and any(v < FLASH_THRESHOLDS[name] for v in values)
+    ]
     return (len(flashed_indicators), flashed_indicators)
 
 
@@ -289,7 +282,7 @@ def get_current_btc_price() -> Optional[float]:
         float: Current Bitcoin price in USD, or None if fetch fails
     """
     try:
-        url = f"{COINGECKO_BASE_URL}/simple/price" "?ids=bitcoin&vs_currencies=usd"
+        url = f"{COINGECKO_BASE_URL}/simple/price?ids=bitcoin&vs_currencies=usd"
         response = requests.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         return float(response.json()["bitcoin"]["usd"])
@@ -321,10 +314,8 @@ def _fetch_single_indicator(
         return all_values
     except Exception as e:
         print(f"Error fetching {name}: {e}")
-        min_indicators[name] = None
-        current_indicators[name] = None
-        min_dates[name] = None
-        last_dates[name] = None
+        min_indicators[name] = current_indicators[name] = None
+        min_dates[name] = last_dates[name] = None
         return None
 
 
@@ -433,7 +424,7 @@ def format_email(
         .title { color: #333; font-size: 1.5em; }
         .text { font-size: 1em; }
         .footer { color: #6c757d; font-size: 0.9em; }
-        .indicator-name { font-weight: bold; margin-top: 1em; }
+        .indicator-name { margin-top: 1em; }
     </style>
     """
 
@@ -442,66 +433,53 @@ def format_email(
         html_body += f'<h2 class="title">BTC Price: ${btc_price:,.2f}</h2>'
 
     # Flash information
-    html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
+    html_body += f'<br><h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
     if flashed_list:
         html_body += (
-            f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
+            f'<h2 class="title">Flashed Indicators: {", ".join(flashed_list)}</h2>'
         )
 
     html_body += "<br><hr>"
 
     # Investment recommendation
-    html_body += "<br>"
-    if investment_amount > 0:
-        html_body += (
-            '<h2 class="title">'
-            f"Investment Recommendation: "
-            f"Invest {investment_amount} EUR</h2>"
-        )
-    else:
-        html_body += (
-            '<h2 class="title">'
-            "Investment Recommendation: "
-            "No investment (0 EUR)</h2>"
-        )
+    recommendation = (
+        f"Invest {investment_amount} EUR"
+        if investment_amount > 0
+        else "No investment (0 EUR)"
+    )
+    html_body += (
+        f'<br><h2 class="title">Investment Recommendation: {recommendation}</h2>'
+    )
 
-    html_body += "<br><hr><br>"
-    html_body += '<h2 class="title">' "Minimum Values for Indicators (Last 7 Days)</h2>"
+    html_body += (
+        '<br><hr><br><h2 class="title">Minimum Values for Indicators (Last 7 Days)</h2>'
+    )
 
     for name, value in min_indicators.items():
         threshold = FLASH_THRESHOLDS.get(name)
         threshold_text = f" (Target: &lt; {threshold})" if threshold is not None else ""
-        if value is not None:
-            min_date = min_dates.get(name, "N/A")
-            last_date = last_dates.get(name, "N/A")
-            current_val = current_indicators.get(name)
-            html_body += f'<div class="text"><div class="indicator-name"><strong>{name}{threshold_text}</strong></div>'
-            if min_date:
-                html_body += (
-                    f"<div><strong>Lowest: {value:.4f} ({min_date})</strong></div>"
-                )
-            else:
-                html_body += f"<div><strong>Lowest: {value:.4f}</strong></div>"
-            if current_val is not None and last_date:
-                html_body += f"<div>Current: {current_val:.4f} ({last_date})</div>"
-            elif current_val is not None:
-                html_body += f"<div>Current: {current_val:.4f}</div>"
-            html_body += "</div><br>"
-        else:
-            html_body += (
-                f'<div class="text"><div class="indicator-name"><strong>{name}{threshold_text}</strong></div>'
-                "<div>[Error fetching data]</div></div><br>"
-            )
+        html_body += f'<div class="text"><div class="indicator-name"><strong>{name}{threshold_text}</strong></div>'
 
-    html_body += "<br><hr>"
+        if value is not None:
+            min_date = min_dates.get(name)
+            date_text = f" ({min_date})" if min_date else ""
+            html_body += f"<div><strong>Lowest: {value:.4f}{date_text}</strong></div>"
+
+            current_val = current_indicators.get(name)
+            if current_val is not None:
+                last_date = last_dates.get(name)
+                date_text = f" ({last_date})" if last_date else ""
+                html_body += f"<div>Current: {current_val:.4f}{date_text}</div>"
+        else:
+            html_body += "<div>[Error fetching data]</div>"
+
+        html_body += "</div><br>"
+
     html_body += (
-        "<br>"
-        "<hr>"
-        f'<p class="footer">'
+        f'<br><hr><p class="footer">'
         f"Generated: {timestamp}<br>"
         "BTC Indicator Emailer</p>"
-        "</body>"
-        "</html>"
+        "</body></html>"
     )
 
     return html_body
