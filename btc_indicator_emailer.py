@@ -216,7 +216,7 @@ def check_flashes(
     mvrv_values: list[float],
     puell_values: list[float],
     ahr999_values: list[float],
-) -> int:
+) -> Tuple[int, list[str]]:
     """
     Checks how many indicators have "flashed" (reached thresholds)
     in last 7 days.
@@ -232,43 +232,73 @@ def check_flashes(
         ahr999_values: List of AHR999 values
 
     Returns:
-        int: Number of indicators that flashed (0-3)
+        tuple: (flash_count, flashed_indicators)
+            - flash_count: Number of indicators that flashed (0-3)
+            - flashed_indicators: List of indicator names that flashed
     """
     flashes = 0
+    flashed_indicators = []
 
     if mvrv_values and any(v < 0 for v in mvrv_values):
         flashes += 1
+        flashed_indicators.append("MVRV Z-Score")
 
     if puell_values and any(v < 0.5 for v in puell_values):
         flashes += 1
+        flashed_indicators.append("Puell Multiple")
 
     if ahr999_values and any(v < 0.45 for v in ahr999_values):
         flashes += 1
+        flashed_indicators.append("AHR999")
 
-    return flashes
+    return (flashes, flashed_indicators)
 
 
-def fetch_indicators() -> (
-    Tuple[Dict[str, Optional[float]], Dict[str, Optional[str]], int]
-):
+def get_current_btc_price() -> Optional[float]:
+    """
+    Gets current Bitcoin price from CoinGecko.
+
+    Returns:
+        float: Current Bitcoin price in USD, or None if fetch fails
+    """
+    try:
+        url = (
+            "https://api.coingecko.com/api/v3/simple/price"
+            "?ids=bitcoin&vs_currencies=usd"
+        )
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        return float(response.json()["bitcoin"]["usd"])
+    except Exception as e:
+        print(f"Error fetching current BTC price: {e}")
+        return None
+
+
+def fetch_indicators() -> Tuple[
+    Dict[str, Optional[float]],
+    Dict[str, Optional[float]],
+    Dict[str, Optional[str]],
+    int,
+    list[str],
+]:
     """
     Fetches all three Bitcoin indicators and checks for flashes.
 
     Returns:
-        tuple: (indicators_dict, last_dates_dict, flash_count)
-            - indicators_dict: Dictionary with indicator names as keys and
-              minimum values (from last 7 days) as floats.
-              Values are None if fetching fails.
-            - last_dates_dict: Dictionary with indicator names as keys and
-              last available dates (YYYY-MM-DD) as strings.
-              Values are None if fetching fails.
+        tuple: (min_indicators, current_indicators, last_dates, flash_count,
+                flashed_list)
+            - min_indicators: Dictionary with minimum values (from last 7 days)
+            - current_indicators: Dictionary with current/latest values
+            - last_dates: Dictionary with last available dates (YYYY-MM-DD)
             - flash_count: Number of indicators that flashed (0-3)
+            - flashed_list: List of indicator names that flashed
 
     Raises:
         Exception: If all indicators fail to fetch
                    (optional - currently handled gracefully)
     """
-    indicators = {}
+    min_indicators = {}
+    current_indicators = {}
     last_dates = {}
     mvrv_values = None
     puell_values = None
@@ -276,59 +306,78 @@ def fetch_indicators() -> (
 
     try:
         min_value, all_values, last_date = get_puell()
-        indicators["Puell Multiple"] = min_value
+        min_indicators["Puell Multiple"] = min_value
+        current_indicators["Puell Multiple"] = all_values[-1] if all_values else None
         last_dates["Puell Multiple"] = last_date
         puell_values = all_values
     except Exception as e:
         print(f"Error fetching Puell Multiple: {e}")
-        indicators["Puell Multiple"] = None
+        min_indicators["Puell Multiple"] = None
+        current_indicators["Puell Multiple"] = None
         last_dates["Puell Multiple"] = None
 
     try:
         min_value, all_values, last_date = get_mvrv_z()
-        indicators["MVRV Z-Score"] = min_value
+        min_indicators["MVRV Z-Score"] = min_value
+        current_indicators["MVRV Z-Score"] = all_values[-1] if all_values else None
         last_dates["MVRV Z-Score"] = last_date
         mvrv_values = all_values
     except Exception as e:
         print(f"Error fetching MVRV Z-Score: {e}")
-        indicators["MVRV Z-Score"] = None
+        min_indicators["MVRV Z-Score"] = None
+        current_indicators["MVRV Z-Score"] = None
         last_dates["MVRV Z-Score"] = None
 
     try:
         min_value, all_values, last_date = get_ahr999()
-        indicators["AHR999"] = min_value
+        min_indicators["AHR999"] = min_value
+        current_indicators["AHR999"] = all_values[-1] if all_values else None
         last_dates["AHR999"] = last_date
         ahr999_values = all_values
     except Exception as e:
         print(f"Error fetching AHR999: {e}")
-        indicators["AHR999"] = None
+        min_indicators["AHR999"] = None
+        current_indicators["AHR999"] = None
         last_dates["AHR999"] = None
 
     # Check for flashes
-    flash_count = check_flashes(
+    flash_count, flashed_list = check_flashes(
         mvrv_values or [], puell_values or [], ahr999_values or []
     )
 
-    return (indicators, last_dates, flash_count)
+    return (
+        min_indicators,
+        current_indicators,
+        last_dates,
+        flash_count,
+        flashed_list,
+    )
 
 
 def format_email(
-    indicators: Dict[str, Optional[float]],
+    min_indicators: Dict[str, Optional[float]],
+    current_indicators: Dict[str, Optional[float]],
     last_dates: Dict[str, Optional[str]],
     flash_count: int,
+    flashed_list: list[str],
+    btc_price: Optional[float],
 ) -> str:
     """
     Formats the indicator values into an email body.
 
     Args:
-        indicators: Dictionary with indicator names and minimum values
-        last_dates: Dictionary with indicator names and last available dates
+        min_indicators: Dictionary with minimum values (from last 7 days)
+        current_indicators: Dictionary with current/latest values
+        last_dates: Dictionary with last available dates
         flash_count: Number of indicators that flashed (0-3)
+        flashed_list: List of indicator names that flashed
+        btc_price: Current Bitcoin price in USD
 
     Returns:
         str: Formatted email body text
     """
     body_lines = []
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Investment recommendation based on flash count
     investment_amounts = {0: 0, 1: 550, 2: 1100, 3: 2100}
@@ -342,13 +391,24 @@ def format_email(
         body_lines.append("💰 INVESTMENT RECOMMENDATION: No investment (0 EUR)\n")
 
     body_lines.append("=" * 40 + "\n")
-    body_lines.append("Minimum Values (Last 7 Days):\n")
 
-    for name, value in indicators.items():
+    # Current Bitcoin price
+    if btc_price:
+        body_lines.append(f"📊 Current BTC Price: ${btc_price:,.2f}\n")
+
+    body_lines.append("Minimum Values (Last 7 Days):\n")
+    for name, value in min_indicators.items():
         if value is not None:
             last_date = last_dates.get(name, "N/A")
+            current_val = current_indicators.get(name)
             if last_date:
-                body_lines.append(f"{name}: {value:.4f} (Last fetch: {last_date})")
+                if current_val is not None:
+                    body_lines.append(
+                        f"{name}: {value:.4f} (Current: {current_val:.4f} "
+                        f"from {last_date})"
+                    )
+                else:
+                    body_lines.append(f"{name}: {value:.4f} (Last fetch: {last_date})")
             else:
                 body_lines.append(f"{name}: {value:.4f}")
         else:
@@ -356,12 +416,15 @@ def format_email(
 
     body_lines.append("\n" + "=" * 40)
     body_lines.append(f"\nIndicators Flashed: {flash_count}/3")
+    if flashed_list:
+        body_lines.append(f"Flashed Indicators: {', '.join(flashed_list)}")
     body_lines.append("\nFlash Thresholds:")
     body_lines.append("  - MVRV Z-Score: < 0")
     body_lines.append("  - Puell Multiple: < 0.5")
     body_lines.append("  - AHR999: < 0.45")
     body_lines.append("\n" + "=" * 40)
-    body_lines.append("\nGenerated automatically by BTC Indicator Emailer")
+    body_lines.append(f"\nGenerated: {timestamp}")
+    body_lines.append("BTC Indicator Emailer")
 
     return "\n".join(body_lines)
 
@@ -447,15 +510,31 @@ def main():
     # EXECUTION
     # ============================================
     print("Fetching Bitcoin indicators...")
-    indicators, last_dates, flash_count = fetch_indicators()
+    (
+        min_indicators,
+        current_indicators,
+        last_dates,
+        flash_count,
+        flashed_list,
+    ) = fetch_indicators()
 
     # Check if we got at least one indicator
-    if all(v is None for v in indicators.values()):
+    if all(v is None for v in min_indicators.values()):
         print("Error: All indicators failed to fetch. Aborting email send.")
         return
 
+    print("Fetching current BTC price...")
+    btc_price = get_current_btc_price()
+
     print("Formatting email...")
-    email_body = format_email(indicators, last_dates, flash_count)
+    email_body = format_email(
+        min_indicators,
+        current_indicators,
+        last_dates,
+        flash_count,
+        flashed_list,
+        btc_price,
+    )
 
     print("Sending email...")
     success = send_email(
