@@ -144,20 +144,29 @@ def get_ahr999() -> Tuple[float, list[float], str]:
     last_date_str = None
     bitcoin_genesis = datetime(2009, 1, 3)
 
-    # Calculate AHR999 for each day in the last 7 days
+    # Group prices by day to calculate once per day
+    daily_prices = {}
     for point in price_points:
-        point_timestamp = point[0] / 1000  # Convert from ms to seconds
+        point_timestamp = point[0] / 1000
         point_date = datetime.fromtimestamp(point_timestamp)
+        date_key = point_date.strftime("%Y-%m-%d")
 
-        # Only calculate for last 7 days
+        # Only process last 7 days
         if point_timestamp < seven_days_timestamp:
             continue
 
-        current_price = point[1]
+        # Use the last price of each day
+        if date_key not in daily_prices or point_timestamp > daily_prices[date_key][0]:
+            daily_prices[date_key] = (point_timestamp, point[1], point_date)
+
+    # Calculate AHR999 for each day
+    for date_key in sorted(daily_prices.keys()):
+        _, current_price, point_date = daily_prices[date_key]
+        point_timestamp = point_date.timestamp()
 
         # Get 200 days of prices before this point for DCA calculation
         point_start = point_date - timedelta(days=200)
-        point_start_ts = int(point_start.timestamp())
+        point_start_ts = point_start.timestamp()
 
         # Find prices in the 200-day window before this point
         prices_200d = [
@@ -167,22 +176,61 @@ def get_ahr999() -> Tuple[float, list[float], str]:
         ]
 
         if not prices_200d:
-            # Fallback: use all available prices
+            # Fallback: use all available prices before this point
             prices_200d = [p[1] for p in price_points if p[0] / 1000 < point_timestamp]
 
-        # Calculate 200-day DCA cost
+        # Calculate 200-day DCA cost (average of prices)
         if prices_200d:
             dca_cost = sum(prices_200d) / len(prices_200d)
         else:
             dca_cost = current_price
 
         # Calculate exponential growth valuation
+        # Using logarithmic regression: log(price) = a + b * log(days)
         days_since_genesis = (point_date - bitcoin_genesis).days
-        log_prices = [math.log(p) for p in prices_200d if p > 0]
-        if log_prices:
-            avg_log_price = sum(log_prices) / len(log_prices)
-            growth_factor = 0.0001 * days_since_genesis
-            growth_valuation = math.exp(avg_log_price + growth_factor)
+
+        if prices_200d and days_since_genesis > 0:
+            # Calculate logarithmic regression coefficients
+            log_prices = [math.log(p) for p in prices_200d if p > 0]
+            log_days = []
+            for p in price_points:
+                if point_start_ts <= p[0] / 1000 < point_timestamp:
+                    p_date = datetime.fromtimestamp(p[0] / 1000)
+                    days = (p_date - bitcoin_genesis).days
+                    if days > 0:
+                        log_days.append(math.log(days))
+
+            if len(log_prices) == len(log_days) and len(log_prices) > 1:
+                # Simple linear regression: y = a + b*x
+                # where y = log(price), x = log(days)
+                n = len(log_prices)
+                sum_x = sum(log_days)
+                sum_y = sum(log_prices)
+                sum_xy = sum(log_prices[i] * log_days[i] for i in range(n))
+                sum_x2 = sum(x * x for x in log_days)
+
+                # Calculate regression coefficients
+                denominator = n * sum_x2 - sum_x * sum_x
+                if denominator != 0:
+                    b = (n * sum_xy - sum_x * sum_y) / denominator
+                    a = (sum_y - b * sum_x) / n
+
+                    # Calculate growth valuation for current day
+                    log_days_current = math.log(days_since_genesis)
+                    log_growth_valuation = a + b * log_days_current
+                    growth_valuation = math.exp(log_growth_valuation)
+                else:
+                    # Fallback: use average price
+                    growth_valuation = sum(prices_200d) / len(prices_200d)
+            else:
+                # Fallback: use average of log prices with trend
+                avg_log_price = sum(log_prices) / len(log_prices)
+                # Use a growth rate based on Bitcoin's historical trend
+                # Typical growth rate is around 0.0001-0.0002 per day
+                growth_rate = 0.00015
+                growth_valuation = math.exp(
+                    avg_log_price + growth_rate * days_since_genesis
+                )
         else:
             growth_valuation = current_price
 
@@ -193,7 +241,7 @@ def get_ahr999() -> Tuple[float, list[float], str]:
         ahr999_values.append(ahr999)
 
         # Track the last date (most recent calculation)
-        last_date_str = point_date.strftime("%Y-%m-%d")
+        last_date_str = date_key
 
     if not ahr999_values:
         raise ValueError("Could not calculate AHR999 values")
