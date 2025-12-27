@@ -34,7 +34,7 @@ FLASH_THRESHOLDS = {
 }
 
 # Investment amounts based on flash count
-INVESTMENT_AMOUNTS = {0: 0, 1: 550, 2: 1100, 3: 2100}
+INVESTMENT_AMOUNTS = {0: 0, 1: 750, 2: 1500, 3: 3000}
 
 
 def _get_date_from_item(item: dict) -> Optional[str]:
@@ -433,8 +433,15 @@ def format_email(
         .title { color: #333; font-size: 1.5em; }
         .text { font-size: 1em; }
         .footer { color: #6c757d; font-size: 0.9em; }
+        .indicator-name { font-weight: bold; margin-top: 1em; }
     </style>
     """
+
+    # Current Bitcoin price (at the top)
+    if btc_price:
+        html_body += f'<h2 class="title">BTC Price: ${btc_price:,.2f}</h2>'
+
+    html_body += "<br><hr>"
 
     # Investment recommendation
     if investment_amount > 0:
@@ -452,14 +459,8 @@ def format_email(
 
     html_body += "<br><hr>"
 
-    # Current Bitcoin price
-    if btc_price:
-        html_body += "<br>" f'<h2 class="title">BTC Price: ' f"${btc_price:,.2f}</h2>"
-
     html_body += (
-        '<h2 class="title">'
-        "Minimum Values for Indicators (Last 7 Days):</h2>"
-        '<ul class="text">'
+        '<h2 class="title">' "Minimum Values for Indicators (Last 7 Days)</h2>"
     )
 
     for name, value in min_indicators.items():
@@ -467,37 +468,25 @@ def format_email(
             min_date = min_dates.get(name, "N/A")
             last_date = last_dates.get(name, "N/A")
             current_val = current_indicators.get(name)
-            if min_date and last_date:
-                if current_val is not None:
-                    html_body += (
-                        f'<li class="text"><strong>{name}:</strong> '
-                        f"Lowest: <strong>{value:.4f}</strong> ({min_date}) / "
-                        f"Current: {current_val:.4f} ({last_date})</li>"
-                    )
-                else:
-                    html_body += (
-                        f'<li class="text"><strong>{name}:</strong> '
-                        f"Lowest: <strong>{value:.4f}</strong> "
-                        f"({min_date})</li>"
-                    )
-            elif min_date:
+            html_body += f'<div class="text"><div class="indicator-name">{name}</div>'
+            if min_date:
                 html_body += (
-                    f'<li class="text"><strong>{name}:</strong> '
-                    f"Lowest: <strong>{value:.4f}</strong> "
-                    f"({min_date})</li>"
+                    f"<div>Lowest: <strong>{value:.4f}</strong> ({min_date})</div>"
                 )
             else:
-                html_body += (
-                    f'<li class="text"><strong>{name}:</strong> '
-                    f"Lowest: <strong>{value:.4f}</strong></li>"
-                )
+                html_body += f"<div>Lowest: <strong>{value:.4f}</strong></div>"
+            if current_val is not None and last_date:
+                html_body += f"<div>Current: {current_val:.4f} ({last_date})</div>"
+            elif current_val is not None:
+                html_body += f"<div>Current: {current_val:.4f}</div>"
+            html_body += "</div>"
         else:
             html_body += (
-                f'<li class="text"><strong>{name}:</strong> '
-                "[Error fetching data]</li>"
+                f'<div class="text"><div class="indicator-name">{name}</div>'
+                "<div>[Error fetching data]</div></div>"
             )
 
-    html_body += "</ul><br><hr>"
+    html_body += "<br><hr>"
 
     # Flash information
     html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
