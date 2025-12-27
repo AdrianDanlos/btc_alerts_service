@@ -7,9 +7,9 @@ This script fetches three Bitcoin indicators
 and sends them via email on a scheduled basis.
 
 Configuration:
-1. Replace placeholder functions (get_puell, get_mvrv_z, get_ahr999x) with real API calls
-2. Set email credentials in the main() function or via environment variables
-3. Schedule using cron (PythonAnywhere), GitHub Actions, or Replit scheduler
+1. Replace placeholder functions (get_puell, get_mvrv_z, get_ahr999x)
+   with real API calls
+2. Schedule using cron (PythonAnywhere), GitHub Actions, or Replit scheduler
 """
 
 import smtplib
@@ -34,7 +34,8 @@ def get_puell() -> float:
     # Placeholder: returns a sample value
     # Replace this with actual API call, e.g.:
     # import requests
-    # response = requests.get('https://api.glassnode.com/v1/metrics/indicators/puell_multiple')
+    # url = 'https://api.glassnode.com/v1/metrics/indicators/puell_multiple'
+    # response = requests.get(url)
     # return response.json()['value']
     return 1.25
 
@@ -54,7 +55,8 @@ def get_mvrv_z() -> float:
     # Placeholder: returns a sample value
     # Replace this with actual API call, e.g.:
     # import requests
-    # response = requests.get('https://api.glassnode.com/v1/metrics/market/mvrv_zscore')
+    # url = 'https://api.glassnode.com/v1/metrics/market/mvrv_zscore'
+    # response = requests.get(url)
     # return response.json()['value']
     return 0.85
 
@@ -88,7 +90,8 @@ def fetch_indicators() -> Dict[str, Optional[float]]:
               Values are None if fetching fails.
 
     Raises:
-        Exception: If all indicators fail to fetch (optional - currently handled gracefully)
+        Exception: If all indicators fail to fetch
+                   (optional - currently handled gracefully)
     """
     indicators = {}
 
@@ -189,9 +192,6 @@ def send_email(
 
     except smtplib.SMTPAuthenticationError:
         print("Error: Authentication failed. Check your email and password.")
-        print(
-            "For Gmail, you may need to use an App Password instead of your regular password."
-        )
         return False
     except smtplib.SMTPException as e:
         print(f"Error: SMTP error occurred: {e}")
@@ -204,27 +204,13 @@ def send_email(
 def main():
     """
     Main function that orchestrates fetching indicators and sending email.
-
-    Configuration:
-    - Set email credentials here or use environment variables
-    - For security, consider using environment variables:
-      export SENDER_EMAIL="your_email@gmail.com"
-      export SENDER_PASSWORD="your_app_password"
-      export RECIPIENT_EMAIL="recipient@gmail.com"
     """
     # ============================================
-    # CONFIGURATION SECTION
+    # CONFIGURATION
     # ============================================
-    # Option 1: Set credentials directly (less secure)
-    SENDER_EMAIL = os.getenv("SENDER_EMAIL", "your_email@gmail.com")
-    SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "your_app_password")
-    RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL", "recipient@gmail.com")
-
-    # Option 2: For Gmail, use App Password (recommended)
-    # 1. Enable 2-Step Verification on your Google account
-    # 2. Go to: https://myaccount.google.com/apppasswords
-    # 3. Generate an app password for "Mail"
-    # 4. Use that 16-character password here
+    SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+    SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+    RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 
     # SMTP Configuration (defaults work for Gmail)
     SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
