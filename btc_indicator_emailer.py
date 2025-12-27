@@ -369,6 +369,19 @@ def format_email(
     body_lines = []
     body_lines.append("Bitcoin Indicator Update (Last 7 Days)\n")
     body_lines.append("=" * 40 + "\n")
+
+    # Investment recommendation based on flash count
+    investment_amounts = {0: 0, 1: 550, 2: 1100, 3: 2100}
+    investment_amount = investment_amounts.get(flash_count, 0)
+
+    if investment_amount > 0:
+        body_lines.append(
+            f"💰 INVESTMENT RECOMMENDATION: " f"Invest {investment_amount} EUR\n"
+        )
+    else:
+        body_lines.append("💰 INVESTMENT RECOMMENDATION: No investment (0 EUR)\n")
+
+    body_lines.append("=" * 40 + "\n")
     body_lines.append("Minimum Values (Last 7 Days):\n")
 
     for name, value in indicators.items():
