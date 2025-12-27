@@ -385,18 +385,23 @@ def format_email(
     html_body = """
     <html>
     <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+    <style>
+        .title { color: #333; font-size: 1.5em; }
+        .text { font-size: 1em; }
+        .footer { color: #6c757d; font-size: 0.9em; }
+    </style>
     """
 
     # Investment recommendation
     if investment_amount > 0:
         html_body += (
-            '<h2 style="color: #333; font-size: 1.5em;">'
+            '<h2 class="title">'
             f"💰 INVESTMENT RECOMMENDATION: "
             f"Invest <strong>{investment_amount} EUR</strong></h2>"
         )
     else:
         html_body += (
-            '<h2 style="color: #333; font-size: 1.5em;">'
+            '<h2 class="title">'
             "💰 INVESTMENT RECOMMENDATION: "
             "No investment (0 EUR)</h2>"
         )
@@ -406,14 +411,13 @@ def format_email(
     # Current Bitcoin price
     if btc_price:
         html_body += (
-            '<h2 style="color: #333; font-size: 1.5em;">'
+            '<h2 class="title">'
             f"📊 Current BTC Price: "
             f"<strong>${btc_price:,.2f}</strong></h2>"
         )
 
     html_body += (
-        '<h2 style="color: #333; font-size: 1.5em;">'
-        "Minimum Values (Last 7 Days):</h2><ul>"
+        '<h2 class="title">' "Minimum Values (Last 7 Days):</h2>" '<ul class="text">'
     )
 
     for name, value in min_indicators.items():
@@ -423,44 +427,46 @@ def format_email(
             if last_date:
                 if current_val is not None:
                     html_body += (
-                        f"<li><strong>{name}:</strong> "
+                        f'<li class="text"><strong>{name}:</strong> '
                         f"<strong>{value:.4f}</strong> ({last_date}) / "
                         f"Current: {current_val:.4f} ({last_date})</li>"
                     )
                 else:
                     html_body += (
-                        f"<li><strong>{name}:</strong> "
+                        f'<li class="text"><strong>{name}:</strong> '
                         f"<strong>{value:.4f}</strong> ({last_date})</li>"
                     )
             else:
                 html_body += (
-                    f"<li><strong>{name}:</strong> "
+                    f'<li class="text"><strong>{name}:</strong> '
                     f"<strong>{value:.4f}</strong></li>"
                 )
         else:
-            html_body += f"<li><strong>{name}:</strong> " "[Error fetching data]</li>"
+            html_body += (
+                f'<li class="text"><strong>{name}:</strong> '
+                "[Error fetching data]</li>"
+            )
 
     html_body += "</ul><hr>"
 
     # Flash information
     html_body += (
-        '<h2 style="color: #333; font-size: 1.5em;">'
+        '<h2 class="title">'
         f"Indicators Flashed: <strong>{flash_count}/3</strong></h2>"
     )
     if flashed_list:
         html_body += (
-            '<h2 style="color: #333; font-size: 1.5em;">'
-            f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
+            '<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
     html_body += (
-        '<h2 style="color: #333; font-size: 1.5em;">Flash Thresholds:</h2>'
-        "<ul>"
+        '<h2 class="title">Flash Thresholds:</h2>'
+        '<ul class="text">'
         "<li>MVRV Z-Score: &lt; 0</li>"
         "<li>Puell Multiple: &lt; 0.5</li>"
         "<li>AHR999: &lt; 0.45</li>"
         "</ul>"
         "<hr>"
-        f'<p style="color: #6c757d; font-size: 0.9em;">'
+        f'<p class="footer">'
         f"Generated: {timestamp}<br>"
         "BTC Indicator Emailer</p>"
         "</body>"
