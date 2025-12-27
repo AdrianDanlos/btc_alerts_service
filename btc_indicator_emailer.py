@@ -458,17 +458,17 @@ def format_email(
             "No investment (0 EUR)</h2>"
         )
 
-    html_body += "<br><hr>"
-
-    html_body += "<br>"
+    html_body += "<br><hr><br>"
     html_body += '<h2 class="title">' "Minimum Values for Indicators (Last 7 Days)</h2>"
 
     for name, value in min_indicators.items():
+        threshold = FLASH_THRESHOLDS.get(name)
+        threshold_text = f" (Target: &lt; {threshold})" if threshold is not None else ""
         if value is not None:
             min_date = min_dates.get(name, "N/A")
             last_date = last_dates.get(name, "N/A")
             current_val = current_indicators.get(name)
-            html_body += f'<div class="text"><div class="indicator-name"><strong>{name}</strong></div>'
+            html_body += f'<div class="text"><div class="indicator-name"><strong>{name}{threshold_text}</strong></div>'
             if min_date:
                 html_body += (
                     f"<div><strong>Lowest: {value:.4f} ({min_date})</strong></div>"
@@ -482,11 +482,11 @@ def format_email(
             html_body += "</div><br>"
         else:
             html_body += (
-                f'<div class="text"><div class="indicator-name"><strong>{name}</strong></div>'
+                f'<div class="text"><div class="indicator-name"><strong>{name}{threshold_text}</strong></div>'
                 "<div>[Error fetching data]</div></div><br>"
             )
 
-    html_body += "<br><br><hr>"
+    html_body += "<br><hr>"
 
     # Flash information
     html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
@@ -494,11 +494,7 @@ def format_email(
         html_body += (
             f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
         )
-    html_body += '<div class="text">'
-    for name, threshold in FLASH_THRESHOLDS.items():
-        html_body += f"<div>{name}: &lt; {threshold}</div>"
     html_body += (
-        "</div>"
         "<br>"
         "<hr>"
         f'<p class="footer">'
