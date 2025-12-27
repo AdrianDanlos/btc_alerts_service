@@ -441,6 +441,13 @@ def format_email(
     if btc_price:
         html_body += f'<h2 class="title">BTC Price: ${btc_price:,.2f}</h2>'
 
+    # Flash information
+    html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
+    if flashed_list:
+        html_body += (
+            f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
+        )
+
     html_body += "<br><hr>"
 
     # Investment recommendation
@@ -487,13 +494,6 @@ def format_email(
             )
 
     html_body += "<br><hr>"
-
-    # Flash information
-    html_body += "<br>" f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
-    if flashed_list:
-        html_body += (
-            f'<h2 class="title">' f"Flashed Indicators: {', '.join(flashed_list)}</h2>"
-        )
     html_body += (
         "<br>"
         "<hr>"
