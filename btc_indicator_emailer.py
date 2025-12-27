@@ -398,6 +398,7 @@ def format_email(
     flash_count: int,
     flashed_list: list[str],
     btc_price: Optional[float],
+    include_investment_recommendation: bool = True,
 ) -> str:
     """
     Formats the indicator values into an email body.
@@ -410,12 +411,12 @@ def format_email(
         flash_count: Number of indicators that flashed (0-3)
         flashed_list: List of indicator names that flashed
         btc_price: Current Bitcoin price in USD
+        include_investment_recommendation: Whether to include investment recommendation section
 
     Returns:
         str: Formatted email body as HTML
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-    investment_amount = INVESTMENT_AMOUNTS.get(flash_count, 0)
 
     html_body = """
     <html>
@@ -441,18 +442,21 @@ def format_email(
 
     html_body += "<br><hr>"
 
-    # Investment recommendation
-    recommendation = (
-        f"Invest {investment_amount} EUR"
-        if investment_amount > 0
-        else "No investment (0 EUR)"
-    )
-    html_body += (
-        f'<br><h2 class="title">Investment Recommendation: {recommendation}</h2>'
-    )
+    # Investment recommendation (optional)
+    if include_investment_recommendation:
+        investment_amount = INVESTMENT_AMOUNTS.get(flash_count, 0)
+        recommendation = (
+            f"Invest {investment_amount} EUR"
+            if investment_amount > 0
+            else "No investment (0 EUR)"
+        )
+        html_body += (
+            f'<br><h2 class="title">Investment Recommendation: {recommendation}</h2>'
+        )
+        html_body += "<br><hr>"
 
     html_body += (
-        '<br><hr><br><h2 class="title">Minimum Values for Indicators (Last 7 Days)</h2>'
+        '<br><h2 class="title">Minimum Values for Indicators (Last 7 Days)</h2>'
     )
 
     for name, value in min_indicators.items():
@@ -592,6 +596,7 @@ def main():
         flash_count,
         flashed_list,
         btc_price,
+        include_investment_recommendation=True,
     )
 
     print("Sending email...")
@@ -604,6 +609,30 @@ def main():
         smtp_server=SMTP_SERVER,
         smtp_port=SMTP_PORT,
     )
+
+    # Send email to Asier when 2+ indicators flash (real execution only)
+    SECONDARY_RECIPIENT = "asiercorral18@gmail.com"
+    if flash_count >= 2:
+        print(f"Sending secondary email to {SECONDARY_RECIPIENT}...")
+        email_body_no_investment = format_email(
+            min_indicators,
+            current_indicators,
+            min_dates,
+            last_dates,
+            flash_count,
+            flashed_list,
+            btc_price,
+            include_investment_recommendation=False,
+        )
+        send_email(
+            sender_email=SENDER_EMAIL,
+            sender_password=SENDER_PASSWORD,
+            recipient_email=SECONDARY_RECIPIENT,
+            subject=EMAIL_SUBJECT,
+            body=email_body_no_investment,
+            smtp_server=SMTP_SERVER,
+            smtp_port=SMTP_PORT,
+        )
 
     if success:
         print("Process completed successfully!")
