@@ -450,14 +450,14 @@ def format_email(
             "No investment (0 EUR)</h2>"
         )
 
-    html_body += "<hr>"
+    html_body += "<br><hr>"
 
     # Current Bitcoin price
     if btc_price:
-        html_body += f'<h2 class="title">Current BTC Price: ' f"${btc_price:,.2f}</h2>"
+        html_body += f'<h2 class="title">BTC Price: ' f"${btc_price:,.2f}</h2>"
 
     html_body += (
-        '<h2 class="title">Minimum Values (Last 7 Days):</h2>' '<ul class="text">'
+        '<h2 class="title">Minimum Values for Indicators (Last 7 Days):</h2>' '<ul class="text">'
     )
 
     for name, value in min_indicators.items():
@@ -495,7 +495,7 @@ def format_email(
                 "[Error fetching data]</li>"
             )
 
-    html_body += "</ul><hr>"
+    html_body += "</ul><br><hr>"
 
     # Flash information
     html_body += f'<h2 class="title">Indicators Flashed: {flash_count}/3</h2>'
