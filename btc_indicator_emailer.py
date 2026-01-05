@@ -107,7 +107,7 @@ def get_puell() -> Tuple[float, list[float], str, str]:
     Raises:
         Exception: If API call fails or returns invalid data
     """
-    return _fetch_chartinspect_indicator("puell-multiple", "puellMultiple")
+    return _fetch_chartinspect_indicator("puell-multiple", "puell_multiple")
 
 
 def get_mvrv_z() -> Tuple[float, list[float], str, str]:
@@ -497,6 +497,7 @@ def send_email(
     body: str,
     smtp_server: str = "smtp.gmail.com",
     smtp_port: int = 587,
+    dry_run: bool = False,
 ) -> bool:
     """
     Sends an email via SMTP.
@@ -509,15 +510,30 @@ def send_email(
         body: Email body text
         smtp_server: SMTP server address (default: Gmail)
         smtp_port: SMTP server port (default: 587 for TLS)
+        dry_run: If True, print email content instead of sending (default: False)
 
     Returns:
-        bool: True if email sent successfully, False otherwise
+        bool: True if email sent successfully (or dry run), False otherwise
 
     Supported email providers:
     - Gmail: smtp.gmail.com, port 587 (TLS) or 465 (SSL)
     - Outlook: smtp-mail.outlook.com, port 587
     - Yahoo: smtp.mail.yahoo.com, port 587
     """
+    if dry_run:
+        print(f"\n{'='*60}")
+        print(f"DRY RUN MODE - Email would be sent to: {recipient_email}")
+        print(f"{'='*60}")
+        print(f"From: {sender_email}")
+        print(f"To: {recipient_email}")
+        print(f"Subject: {subject}")
+        print(f"{'='*60}")
+        print("Email Body (HTML):")
+        print(f"{'='*60}")
+        print(body)
+        print(f"{'='*60}\n")
+        return True
+
     try:
         # Create message
         msg = MIMEMultipart()
@@ -563,6 +579,9 @@ def main():
     SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 
+    # Dry run mode - if DRY_RUN is set to "true" or "1", don't actually send emails
+    DRY_RUN = os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes")
+
     # Email subject
     EMAIL_SUBJECT = "BTC DCA TIME"
 
@@ -599,7 +618,10 @@ def main():
         include_investment_recommendation=True,
     )
 
-    print("Sending email...")
+    if DRY_RUN:
+        print("DRY RUN MODE: Printing email instead of sending...")
+    else:
+        print("Sending email...")
     success = send_email(
         sender_email=SENDER_EMAIL,
         sender_password=SENDER_PASSWORD,
@@ -608,11 +630,12 @@ def main():
         body=email_body,
         smtp_server=SMTP_SERVER,
         smtp_port=SMTP_PORT,
+        dry_run=DRY_RUN,
     )
 
-    # Send email to Asier when 2+ indicators flash (real execution only)
+    # Send email to Asier when 2+ indicators flash (real execution only, not in dry run)
     SECONDARY_RECIPIENT = "asiercorral18@gmail.com"
-    if flash_count >= 2:
+    if flash_count >= 2 and not DRY_RUN:
         print(f"Sending secondary email to {SECONDARY_RECIPIENT}...")
         email_body_no_investment = format_email(
             min_indicators,
@@ -632,6 +655,7 @@ def main():
             body=email_body_no_investment,
             smtp_server=SMTP_SERVER,
             smtp_port=SMTP_PORT,
+            dry_run=False,  # Always send secondary email in production
         )
 
     if success:
@@ -641,4 +665,18 @@ def main():
 
 
 if __name__ == "__main__":
+    # Load .env file only when running locally (not in GitHub Actions)
+    # GitHub Actions uses environment variables from secrets, so we don't load .env there
+    if not os.getenv("GITHUB_ACTIONS"):
+        try:
+            from dotenv import load_dotenv
+            # Load .env file if it exists (won't error if it doesn't exist)
+            if load_dotenv():
+                print("Loaded environment variables from .env file")
+            # Note: load_dotenv() returns True if .env was found and loaded, False otherwise
+        except ImportError:
+            # python-dotenv not installed - user needs to install it for local development
+            print("Warning: python-dotenv not installed. Install it with: pip install python-dotenv")
+            print("Continuing with system environment variables...")
+    
     main()
