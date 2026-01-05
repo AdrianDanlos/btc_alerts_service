@@ -107,7 +107,7 @@ def get_puell() -> Tuple[float, list[float], str, str]:
     Raises:
         Exception: If API call fails or returns invalid data
     """
-    return _fetch_chartinspect_indicator("puell-multiple", "puell_multiple")
+    return _fetch_chartinspect_indicator("puell-multiple", "puellMultiple")
 
 
 def get_mvrv_z() -> Tuple[float, list[float], str, str]:
